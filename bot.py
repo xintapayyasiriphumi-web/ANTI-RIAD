@@ -6,9 +6,9 @@ import os
 # ──────────────────────────────────────────
 #  CONFIG
 # ──────────────────────────────────────────
-TOKEN              = os.getenv("DISCORD_TOKEN")          # env var บน Railway
-DETECT_CHANNEL_ID  = 1519766557268508733                 # honeypot channel ID
-LOG_CHANNEL_ID     = int(os.getenv("LOG_CHANNEL_ID", 0)) # ห้อง log (0 = ปิด)
+TOKEN             = os.getenv("DISCORD_TOKEN")          # env var บน Railway
+DETECT_CHANNEL_ID = 1519766557268508733                 # honeypot channel ID
+LOG_CHANNEL_ID    = int(os.getenv("LOG_CHANNEL_ID", 0)) # ห้อง log (0 = ปิด)
 
 # regex จับลิ้งทุกรูปแบบ
 URL_PATTERN = re.compile(
@@ -24,6 +24,16 @@ intents.message_content = True
 intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+
+# ──────────────────────────────────────────
+#  HELPER: เช็คว่าเป็น Admin หรือเปล่า
+# ──────────────────────────────────────────
+def is_admin(member: discord.Member) -> bool:
+    return (
+        member.guild_permissions.administrator or
+        member.guild_permissions.manage_guild
+    )
 
 
 # ──────────────────────────────────────────
@@ -51,16 +61,16 @@ async def send_log(guild: discord.Guild, member: discord.Member, reason: str, co
 #  HELPER: ดำเนินการกับผู้กระทำ
 # ──────────────────────────────────────────
 async def handle_threat(message: discord.Message, reason: str):
-    member = message.guild.get_member(message.author.id)
+    member  = message.guild.get_member(message.author.id)
     content = message.content
 
     # 1) ลบข้อความก่อน
     try:
         await message.delete()
     except discord.Forbidden:
-        print(f"[DetectX] ❌ ไม่มีสิทธิ์ลบข้อความ")
+        print("[DetectX] ❌ ไม่มีสิทธิ์ลบข้อความ")
     except discord.NotFound:
-        pass  # ลบไปแล้ว
+        pass
 
     # 2) Log
     if member:
@@ -76,7 +86,7 @@ async def handle_threat(message: discord.Message, reason: str):
         except Exception as e:
             print(f"[DetectX] ❌ Kick error: {e}")
     else:
-        print(f"[DetectX] ⚠️ ไม่พบ member {message.author.id} ในเซิร์ฟเวอร์")
+        print(f"[DetectX] ⚠️ ไม่พบ member {message.author.id}")
 
 
 # ──────────────────────────────────────────
@@ -97,9 +107,13 @@ async def on_message(message: discord.Message):
     if message.author.bot:
         return
 
-    # ตรวจเฉพาะห้อง honeypot (ใช้ ID — ไม่เปลี่ยนตามชื่อห้อง)
+    # ตรวจเฉพาะห้อง honeypot
     if message.channel.id != DETECT_CHANNEL_ID:
         await bot.process_commands(message)
+        return
+
+    # ── ข้ามถ้าเป็น Admin ──
+    if is_admin(message.author):
         return
 
     # ── ตรวจ 1: มีไฟล์แนบ (รูป, วิดีโอ, ไฟล์ทุกชนิด) ──
@@ -133,8 +147,9 @@ async def on_message_edit(before: discord.Message, after: discord.Message):
         return
     if after.channel.id != DETECT_CHANNEL_ID:
         return
+    if is_admin(after.author):
+        return
 
-    # ถ้าแก้แล้วมีลิ้ง/ไฟล์
     if after.attachments or after.embeds or URL_PATTERN.search(after.content):
         reason = "แก้ข้อความเพิ่มลิ้ง/ไฟล์ในห้อง honeypot"
         await handle_threat(after, reason)
