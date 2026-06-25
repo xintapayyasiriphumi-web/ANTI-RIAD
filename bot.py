@@ -6,9 +6,9 @@ import os
 # ──────────────────────────────────────────
 #  CONFIG
 # ──────────────────────────────────────────
-TOKEN          = os.getenv("DISCORD_TOKEN")          # env var บน Railway
-DETECT_CHANNEL = "detectx"                           # ชื่อห้องที่ monitor (lowercase)
-LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", 0)) # ห้อง log (0 = ปิด)
+TOKEN              = os.getenv("DISCORD_TOKEN")          # env var บน Railway
+DETECT_CHANNEL_ID  = 1519766557268508733                 # honeypot channel ID
+LOG_CHANNEL_ID     = int(os.getenv("LOG_CHANNEL_ID", 0)) # ห้อง log (0 = ปิด)
 
 # regex จับลิ้งทุกรูปแบบ
 URL_PATTERN = re.compile(
@@ -85,7 +85,7 @@ async def handle_threat(message: discord.Message, reason: str):
 @bot.event
 async def on_ready():
     print(f"[DetectX] ✅ Logged in as {bot.user}")
-    print(f"[DetectX] 🔍 Monitoring channel: #{DETECT_CHANNEL}")
+    print(f"[DetectX] 🔍 Monitoring channel ID: {DETECT_CHANNEL_ID}")
 
 
 # ──────────────────────────────────────────
@@ -97,27 +97,27 @@ async def on_message(message: discord.Message):
     if message.author.bot:
         return
 
-    # ตรวจเฉพาะห้อง detectx (ชื่อ lowercase)
-    if message.channel.name.lower() != DETECT_CHANNEL:
+    # ตรวจเฉพาะห้อง honeypot (ใช้ ID — ไม่เปลี่ยนตามชื่อห้อง)
+    if message.channel.id != DETECT_CHANNEL_ID:
         await bot.process_commands(message)
         return
 
     # ── ตรวจ 1: มีไฟล์แนบ (รูป, วิดีโอ, ไฟล์ทุกชนิด) ──
     if message.attachments:
         types = [a.content_type or "unknown" for a in message.attachments]
-        reason = f"แนบไฟล์ในห้อง #{DETECT_CHANNEL} ({', '.join(types)})"
+        reason = f"แนบไฟล์ในห้อง honeypot ({', '.join(types)})"
         await handle_threat(message, reason)
         return
 
     # ── ตรวจ 2: มี embed (Discord auto-embed จากลิ้ง) ──
     if message.embeds:
-        reason = f"ส่ง embed/preview ในห้อง #{DETECT_CHANNEL}"
+        reason = "ส่ง embed/preview ในห้อง honeypot"
         await handle_threat(message, reason)
         return
 
     # ── ตรวจ 3: มีลิ้งใน text ──
     if URL_PATTERN.search(message.content):
-        reason = f"ส่งลิ้งในห้อง #{DETECT_CHANNEL}"
+        reason = "ส่งลิ้งในห้อง honeypot"
         await handle_threat(message, reason)
         return
 
@@ -131,12 +131,12 @@ async def on_message(message: discord.Message):
 async def on_message_edit(before: discord.Message, after: discord.Message):
     if after.author.bot:
         return
-    if after.channel.name.lower() != DETECT_CHANNEL:
+    if after.channel.id != DETECT_CHANNEL_ID:
         return
 
     # ถ้าแก้แล้วมีลิ้ง/ไฟล์
     if after.attachments or after.embeds or URL_PATTERN.search(after.content):
-        reason = f"แก้ข้อความเพิ่มลิ้ง/ไฟล์ในห้อง #{DETECT_CHANNEL}"
+        reason = "แก้ข้อความเพิ่มลิ้ง/ไฟล์ในห้อง honeypot"
         await handle_threat(after, reason)
 
 
